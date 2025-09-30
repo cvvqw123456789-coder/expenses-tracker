@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>💰 متابعة المصاريف</title>
   <style>
-    body { font-family: Tahoma, Arial, sans-serif; direction: rtl; background: #f4f6f9; padding: 20px; }
+    body { font-family: Tahoma, Arial, sans-serif; direction: rtl; background: #f9fafb; padding: 20px; }
     h2, h3 { text-align: center; margin-bottom: 15px; color: #2c3e50; }
     .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 3px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
     .row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 12px; }
@@ -178,4 +178,29 @@
       }
       window.resetSalary = function() { salary = 0; saveData(); renderSummary(); }
       window.addFixedExpense = function() {
-        const desc = document.getElementById
+        const desc = document.getElementById("fixedDesc").value;
+        const amt = +document.getElementById("fixedAmount").value;
+        if(desc && amt) { fixedExpenses.push({desc, amount: amt}); saveData(); renderFixedExpenses(); renderSummary(); }
+      }
+      window.deleteFixed = function(i) { fixedExpenses.splice(i,1); saveData(); renderFixedExpenses(); renderSummary(); }
+      window.addExpense = function() {
+        const desc = document.getElementById("desc").value;
+        const amt = +document.getElementById("amount").value;
+        const cat = document.getElementById("category").value;
+        if(desc && amt) { variableExpenses.push({date: new Date().toLocaleDateString(), desc, amount: amt, category: cat}); saveData(); renderVariableExpenses(); renderSummary(); }
+      }
+      window.deleteVariable = function(i) { variableExpenses.splice(i,1); saveData(); renderVariableExpenses(); renderSummary(); }
+      window.setUserWeeklyLimit = function() {
+        const val = +document.getElementById("userWeeklyLimit").value;
+        if(val) { userWeeklyLimit = val; saveData(); renderSummary(); }
+      }
+      window.resetWeeklyLimit = function() { userWeeklyLimit = 0; saveData(); renderSummary(); }
+
+      // أول تشغيل
+      renderFixedExpenses();
+      renderVariableExpenses();
+      renderSummary();
+    });
+  </script>
+</body>
+</html>
