@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>متابعة المصاريف الشهرية والأسبوعية</title>
+  <style>
+    body { font-family: "Segoe UI", Tahoma, sans-serif; direction: rtl; background: #f5f7fa; padding: 20px; color: #2c3e50; }
+    h2, h3 { text-align: center; margin-bottom: 15px; color: #34495e; }
+    .card { background: white; padding: 20px; border-radius: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); margin-bottom: 25px; }
+    .row { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; margin-bottom: 12px; }
+    input, select { margin: 5px; padding: 10px; border: 1px solid #ccc; border-radius: 6px; min-width: 150px; font-size: 14px; }
+    button { padding: 8px 15px; margin: 5px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: 0.2s; }
+    button.save { background: #3498db; color: white; }
+    button.save:hover { background: #2980b9; }
+    button.reset { background: #f39c12; color: white; }
+    button.reset:hover { background: #d68910; }
+    button.delete { background: #e74c3c; color: white; display: flex; align-items: center; gap: 5px; justify-content: center; }
+    button.delete:hover { background: #c0392b; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; border-radius: 6px; overflow: hidden; }
+    th, td { border: 1px solid #eee; padding: 10px; text-align: center; font-size: 14px; }
+    th { background: #3498db; color: white; font-weight: bold; }
+    .totals { margin-top: 10px; text-align: center; font-weight: bold; color: #2c3e50; }
+    #summary { font-size: 15px; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); line-height: 1.8; margin-top: 20px; }
+    #summary table { width: 100%; border-collapse: collapse; }
+    #summary th, #summary td { border: 1px solid #eee; padding: 10px; text-align: center; }
+    #summary th { background: #2ecc71; color: white; }
+    .good { color: #27ae60; font-weight: bold; }
+    .bad { color: #e74c3c; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h2>💰 متابعة المصاريف الشهرية والأسبوعية</h2>
+
+  <div class="card">
+    <h3>💵 إدخال الراتب الشهري</h3>
+    <div class="row">
+      <input type="number" id="salary" placeholder="الراتب الشهري">
+      <button class="save" onclick="setSalary()">حفظ</button>
+      <button class="reset" onclick="resetSalary()">إعادة ضبط</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>🏠 المصاريف الثابتة (شهرية)</h3>
+    <div class="row">
+      <input type="text" id="fixedDesc" placeholder="الوصف">
+      <input type="number" id="fixedAmount" placeholder="المبلغ">
+      <button class="save" onclick="addFixedExpense()">إضافة</button>
+    </div>
+    <table id="fixedTable">
+      <thead>
+        <tr><th>الوصف</th><th>المبلغ</th><th>إجراء</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div class="totals" id="fixedTotal"></div>
+  </div>
+
+  <div class="card">
+    <h3>📅 المصاريف المتغيرة (أسبوعية)</h3>
+    <div class="totals" id="suggestedLimit"></div>
+    <div class="totals" id="userLimitInfo"></div>
+    <div class="row">
+      <input type="number" id="userWeeklyLimit" placeholder="حد أسبوعي (يدوي)">
+      <button class="save" onclick="setUserWeeklyLimit()">حفظ</button>
+      <button class="reset" onclick="resetWeeklyLimit()">إعادة ضبط</button>
+    </div>
+    <div class="row">
+      <input type="text" id="desc" placeholder="الوصف">
+      <input type="number" id="amount" placeholder="المبلغ">
+      <select id="category">
+        <option>🍔 أكل</option>
+        <option>🎮 ترفيه</option>
+        <option>🏠 أخرى</option>
+      </select>
+      <button class="save" onclick="addExpense()">إضافة</button>
+    </div>
+    <table id="expensesTable">
+      <thead>
+        <tr><th>التاريخ</th><th>الوصف</th><th>الفئة</th><th>المبلغ</th><th>إجراء</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div class="totals" id="variableTotal"></div>
+  </div>
+
+  <div class="card" id="summary"></div>
+
+  <script>
+    let salary = +localStorage.getItem("salary") || 0;
+    let fixedExpenses = JSON.parse(localStorage.getItem("fixedExpenses")) || [];
+    let allExpenses = JSON.parse(localStorage.getItem("expenses")) || [];
+    let suggestedWeeklyLimit = 0;
+    let userWeeklyLimit = +localStorage.getItem("userWeeklyLimit") || 0;
+
+    document.getElementById("salary").value = salary;
+    if (userWeeklyLimit) document.getElementById("userWeeklyLimit").value = userWeeklyLimit;
+
+    function setSalary() {
+      salary = +document.getElementById("salary").value || 0;
+      localStorage.setItem("salary", salary);
+      updateSummary();
+      alert("تم حفظ الراتب.");
+    }
+
+    function resetSalary() {
+      salary = 0;
+      localStorage.removeItem("salary");
+      document.getElementById("salary").value = "";
+      updateSummary();
+      alert("تم إعادة ضبط الراتب.");
+    }
+
+    function setUserWeeklyLimit() {
+      userWeeklyLimit = +document.getElementById("userWeeklyLimit").value || 0;
+      localStorage.setItem("userWeeklyLimit", userWeeklyLimit);
+      updateSummary();
+      alert("تم حفظ الحد الأسبوعي.");
+    }
+
+    function resetWeeklyLimit() {
+      userWeeklyLimit = 0;
+      localStorage.removeItem("userWeeklyLimit");
+      document.getElementById("userWeeklyLimit").value = "";
+      updateSummary();
+      alert("تم إعادة ضبط الحد الأسبوعي.");
+    }
+
+    function addFixedExpense() {
+      const desc = document.getElementById("fixedDesc").value.trim() || "-";
+      const amount = +document.getElementById("fixedAmount").value;
+      if (!amount || amount <=0) return alert("أدخل مبلغ صالح.");
+      fixedExpenses.push({desc, amount});
+      localStorage.setItem("fixedExpenses", JSON.stringify(fixedExpenses));
+      renderFixedTable();
+      updateSummary();
+      document.getElementById("fixedDesc").value = "";
+      document.getElementById("fixedAmount").value = "";
+    }
+
+    function deleteFixedExpense(index) {
+      fixedExpenses.splice(index,1);
+      localStorage.setItem("fixedExpenses", JSON.stringify(fixedExpenses));
+      renderFixedTable();
+      updateSummary();
+    }
+
+    function renderFixedTable() {
+      const tbody = document.querySelector("#fixedTable tbody");
+      tbody.innerHTML = "";
+      fixedExpenses.forEach((f,i) => {
+        tbody.innerHTML += `<tr>
+          <td>${f.desc}</td>
+          <td>${f.amount} ريال</td>
+          <td><button class='delete' onclick='deleteFixedExpense(${i})'>🗑️ حذف</button></td>
+        </tr>`;
+      });
+      const totalFixed = fixedExpenses.reduce((s,f)=>s+f.amount,0);
+      document.getElementById("fixedTotal").innerText = "مجموع الثابتة: " + totalFixed + " ريال";
+    }
+
+    function addExpense() {
+      const desc = document.getElementById("desc").value.trim() || "-";
+      const amount = +document.getElementById("amount").value;
+      const category = document.getElementById("category").value;
+      if (!amount || amount<=0) return alert("أدخل مبلغ صالح.");
+      const dateISO = new Date().toISOString();
+      const expense = {dateISO, desc, category, amount};
+      allExpenses.push(expense);
+      localStorage.setItem("expenses", JSON.stringify(allExpenses));
+      renderTable();
+      updateSummary();
+      document.getElementById("desc").value = "";
+      document.getElementById("amount").value = "";
+    }
+
+    function deleteExpense(index) {
+      allExpenses.splice(index,1);
+      localStorage.setItem("expenses", JSON.stringify(allExpenses));
+      renderTable();
+      updateSummary();
+    }
+
+    function renderTable() {
+      const tbody = document.querySelector("#expensesTable tbody");
+      tbody.innerHTML = "";
+      if (allExpenses.length === 0) {
+        tbody.innerHTML = "<tr><td colspan='5'>لا توجد مصاريف مسجلة.</td></tr>";
+        document.getElementById("variableTotal").innerText = "مجموع المتغيرة: 0 ريال";
+        return;
+      }
+      allExpenses.forEach((e,i) => {
+        tbody.innerHTML += `<tr>
+          <td>${new Date(e.dateISO).toLocaleDateString("en-CA")}</td>
+          <td>${e.desc}</td>
+          <td>${e.category}</td>
+          <td>${e.amount} ريال</td>
+          <td><button class='delete' onclick='deleteExpense(${i})'>🗑️ حذف</button></td>
+        </tr>`;
+      });
+      const totalVar = allExpenses.reduce((s,e)=>s+e.amount,0);
+      document.getElementById("variableTotal").innerText = "مجموع المتغيرة (كامل): " + totalVar + " ريال";
+    }
+
+    function getWeeksInMonth(year, month) {
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const used = (lastDay.getDate() - firstDay.getDate()) + 1;
+      return Math.ceil(used / 7);
+    }
+
+    function getCurrentWeekExpenses() {
+      const now = new Date();
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - now.getDay());
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+
+      return allExpenses.filter(e => {
+        const d = new Date(e.dateISO);
+        return d >= weekStart && d <= weekEnd;
+      });
+    }
+
+    function updateSummary() {
+      const totalFixed = fixedExpenses.reduce((s,f)=>s+f.amount,0);
+      const totalVar = allExpenses.reduce((s,e)=>s+e.amount,0);
+      const remainingMonthly = salary - totalFixed - totalVar;
+      const now = new Date();
+      const weeksInMonth = getWeeksInMonth(now.getFullYear(), now.getMonth());
+
+      suggestedWeeklyLimit = remainingMonthly > 0 ? Math.floor((salary - totalFixed) / weeksInMonth) : 0;
+      const weekExpenses = getCurrentWeekExpenses();
+      const totalWeek = weekExpenses.reduce((s,e)=>s+e.amount,0);
+      const activeLimit = userWeeklyLimit > 0 ? userWeeklyLimit : suggestedWeeklyLimit;
+      const remainingWeek = activeLimit - totalWeek;
+
+      let weekClass = totalWeek <= activeLimit ? "good" : "bad";
+      let weekIcon = totalWeek <= activeLimit ? "✅" : "❌";
+
+      document.getElementById("suggestedLimit").innerText = "🎯 المبلغ المقترح للحد الأسبوعي: " + suggestedWeeklyLimit + " ريال";
+      document.getElementById("userLimitInfo").innerText = "✍️ الحد الأسبوعي (المستخدم): " + (userWeeklyLimit > 0 ? userWeeklyLimit + " ريال" : "-");
+
+      document.getElementById("summary").innerHTML = `
+        <table>
+          <tr><th>📅 عدد أسابيع الشهر</th><td>${weeksInMonth}</td></tr>
+          <tr><th>💵 الراتب الشهري</th><td>${salary} ريال</td></tr>
+          <tr><th>🏠 مجموع المصاريف الثابتة</th><td>${totalFixed} ريال</td></tr>
+          <tr><th>✍️ الحد الأسبوعي (المستخدم)</th><td>${userWeeklyLimit > 0 ? userWeeklyLimit + " ريال" : "-"}</td></tr>
+          <tr><th>💸 مصاريف هذا الأسبوع</th><td class="${weekClass}">${weekIcon} ${totalWeek} ريال</td></tr>
+          <tr><th>💳 مجموع المصاريف خلال الشهر</th><td>${totalVar} ريال</td></tr>
+          <tr><th>📊 المتبقي من الراتب الشهري</th><td>${remainingMonthly} ريال</td></tr>
+          <tr><th>🗓️ المتبقي من الحد الأسبوعي</th><td class="${weekClass}">${remainingWeek} ريال</td></tr>
+        </table>
+      `;
+    }
+
+    renderFixedTable();
+    renderTable();
+    updateSummary();
+  </script>
+</body>
+</html>
