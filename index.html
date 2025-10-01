@@ -17,10 +17,10 @@
     th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
     th { background: #3498db; color: white; }
     .totals { margin-top: 10px; text-align: center; font-weight: bold; }
-    #summary { font-size: 15px; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); line-height: 1.8; margin-top: 20px; }
-    #summary table { width: 100%; border-collapse: collapse; }
-    #summary th, #summary td { border: 1px solid #ddd; padding: 10px; text-align: center; }
-    #summary th { background: #2980b9; color: white; }
+    #summary, #weeklyReport { font-size: 15px; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); line-height: 1.8; margin-top: 20px; }
+    #summary table, #weeklyReport table { width: 100%; border-collapse: collapse; }
+    #summary th, #summary td, #weeklyReport th, #weeklyReport td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+    #summary th, #weeklyReport th { background: #2980b9; color: white; }
     .good { color: #27ae60; font-weight: bold; }
     .bad { color: #e74c3c; font-weight: bold; }
   </style>
@@ -74,11 +74,20 @@
     </div>
     <table id="expensesTable">
       <thead>
-        <tr><th>التاريخ</th><th>الوصف</th><th>الفئة</th><th>المبلغ</th><th>إجراء</th></tr>
+        <tr><th>الأسبوع</th><th>التاريخ</th><th>الوصف</th><th>الفئة</th><th>المبلغ</th><th>إجراء</th></tr>
       </thead>
       <tbody></tbody>
     </table>
     <div class="totals" id="variableTotal"></div>
+  </div>
+
+  <div class="card" id="weeklyReport">
+    <h3>📊 تقرير الأسابيع</h3>
+    <div class="totals" id="weeklyLimitInfo"></div>
+    <div style="margin-bottom:10px; text-align:center; color:#555;">
+      ℹ️ فترة الحساب: 4 أسابيع ثابتة من 27 الشهر → 26 الشهر اللي بعده
+    </div>
+    <div id="weeklyReportContent"></div>
   </div>
 
   <div class="card" id="summary"></div>
@@ -89,12 +98,27 @@
       let fixedExpenses = JSON.parse(localStorage.getItem("fixedExpenses") || "[]");
       let variableExpenses = JSON.parse(localStorage.getItem("variableExpenses") || "[]");
       let userWeeklyLimit = +localStorage.getItem("userWeeklyLimit") || 0;
+      const totalWeeks = 4;
 
       function saveData() {
         localStorage.setItem("salary", salary);
         localStorage.setItem("fixedExpenses", JSON.stringify(fixedExpenses));
         localStorage.setItem("variableExpenses", JSON.stringify(variableExpenses));
         localStorage.setItem("userWeeklyLimit", userWeeklyLimit);
+      }
+
+      function getWeekFromSalary(date) {
+        let year = date.getFullYear();
+        let month = date.getMonth();
+        let cycleStart = new Date(year, month, 27);
+        if (date < cycleStart) {
+          month -= 1;
+          cycleStart = new Date(year, month, 27);
+        }
+        let diffDays = Math.floor((date - cycleStart) / (1000 * 60 * 60 * 24));
+        let week = Math.floor(diffDays / 7) + 1;
+        if (week > totalWeeks) week = totalWeeks;
+        return week;
       }
 
       function renderFixedExpenses() {
@@ -117,27 +141,66 @@
         const tbody = document.querySelector("#expensesTable tbody");
         tbody.innerHTML = "";
         let total = 0;
-        variableExpenses.forEach((e, i) => {
-          total += e.amount;
-          const row = `<tr>
-            <td>${e.date}</td>
-            <td>${e.desc}</td>
-            <td>${e.category}</td>
-            <td>${e.amount}</td>
-            <td><button class="delete" onclick="deleteVariable(${i})">🗑️ حذف</button></td>
-          </tr>`;
-          tbody.innerHTML += row;
+        const today = new Date();
+        const currentWeek = getWeekFromSalary(today);
+
+        variableExpenses
+          .filter(e => e.week === currentWeek)
+          .forEach((e, i) => {
+            total += e.amount;
+            const row = `<tr>
+              <td>${e.week}</td>
+              <td>${e.date}</td>
+              <td>${e.desc}</td>
+              <td>${e.category}</td>
+              <td>${e.amount}</td>
+              <td><button class="delete" onclick="deleteVariable(${i})">🗑️ حذف</button></td>
+            </tr>`;
+            tbody.innerHTML += row;
+          });
+
+        document.getElementById("variableTotal").innerText =
+          "💸 مصاريف هذا الأسبوع: " + total + " ريال";
+      }
+
+      function renderWeeklyReport() {
+        let weeks = {};
+        variableExpenses.forEach(e => {
+          weeks[e.week] = (weeks[e.week] || 0) + e.amount;
         });
-        document.getElementById("variableTotal").innerText = "مجموع المتغيرة: " + total + " ريال";
+
+        let suggested = Math.round((salary - fixedExpenses.reduce((a, b) => a + b.amount, 0)) / totalWeeks);
+        let limit = userWeeklyLimit || suggested;
+
+        document.getElementById("weeklyLimitInfo").innerText =
+          userWeeklyLimit
+            ? "✍️ الحد الأسبوعي (المستخدم): " + userWeeklyLimit + " ريال"
+            : "🎯 الحد الأسبوعي (المقترح): " + suggested + " ريال";
+
+        let html = "<table><thead><tr><th>📅 الأسبوع</th><th>💸 مجموع المصاريف</th><th>📝 الحالة</th></tr></thead><tbody>";
+        for (let w = 1; w <= totalWeeks; w++) {
+          let spent = weeks[w] || 0;
+          let diff = limit - spent;
+          let status = diff >= 0 
+            ? `<span class='good'>✅ متبقي ${diff} ريال</span>` 
+            : `<span class='bad'>❌ تجاوز بـ ${Math.abs(diff)} ريال</span>`;
+          html += `<tr><td>${w}</td><td>${spent} ريال</td><td>${status}</td></tr>`;
+        }
+        html += "</tbody></table>";
+
+        document.getElementById("weeklyReportContent").innerHTML = html;
       }
 
       function renderSummary() {
         let fixedTotal = fixedExpenses.reduce((a, b) => a + b.amount, 0);
-        let variableTotal = variableExpenses.reduce((a, b) => a + b.amount, 0);
-        let remaining = salary - fixedTotal - variableTotal;
+        const today = new Date();
+        const currentWeek = getWeekFromSalary(today);
 
-        let weeks = 4;
-        let suggested = Math.round((salary - fixedTotal) / weeks);
+        let currentWeekExpenses = variableExpenses.filter(e => e.week === currentWeek);
+        let variableTotal = currentWeekExpenses.reduce((a, b) => a + b.amount, 0);
+        let remaining = salary - fixedTotal - variableExpenses.reduce((a, b) => a + b.amount, 0);
+
+        let suggested = Math.round((salary - fixedTotal) / totalWeeks);
         let weeklyLimit = userWeeklyLimit || suggested;
         let weeklyRemaining = weeklyLimit - variableTotal;
 
@@ -147,7 +210,7 @@
           "✍️ الحد الأسبوعي (المستخدم): " + (userWeeklyLimit || "غير محدد");
 
         let html = "<table><thead><tr>" +
-          "<th>📅 عدد أسابيع الشهر</th>" +
+          "<th>📅 عدد أسابيع الدورة</th>" +
           "<th>💵 الراتب</th>" +
           "<th>🏠 المصاريف الثابتة</th>" +
           "<th>✍️ الحد الأسبوعي</th>" +
@@ -158,13 +221,13 @@
           "</tr></thead><tbody>";
 
         html += `<tr>
-          <td>${weeks}</td>
+          <td>${totalWeeks}</td>
           <td>${salary}</td>
           <td>${fixedTotal}</td>
           <td>${weeklyLimit}</td>
           <td>${variableTotal}</td>
           <td class="${weeklyRemaining >= 0 ? "good" : "bad"}">${weeklyRemaining}</td>
-          <td>${fixedTotal + variableTotal}</td>
+          <td>${fixedTotal + variableExpenses.reduce((a, b) => a + b.amount, 0)}</td>
           <td class="${remaining >= 0 ? "good" : "bad"}">${remaining}</td>
         </tr>`;
 
@@ -172,34 +235,44 @@
         document.getElementById("summary").innerHTML = html;
       }
 
+      // Events
       window.setSalary = function() {
         const val = +document.getElementById("salary").value;
-        if(val) { salary = val; saveData(); renderSummary(); }
+        if(val) { salary = val; saveData(); renderAll(); }
       }
-      window.resetSalary = function() { salary = 0; saveData(); renderSummary(); }
+      window.resetSalary = function() { salary = 0; saveData(); renderAll(); }
       window.addFixedExpense = function() {
         const desc = document.getElementById("fixedDesc").value;
         const amt = +document.getElementById("fixedAmount").value;
-        if(desc && amt) { fixedExpenses.push({desc, amount: amt}); saveData(); renderFixedExpenses(); renderSummary(); }
+        if(desc && amt) { fixedExpenses.push({desc, amount: amt}); saveData(); renderAll(); }
       }
-      window.deleteFixed = function(i) { fixedExpenses.splice(i,1); saveData(); renderFixedExpenses(); renderSummary(); }
+      window.deleteFixed = function(i) { fixedExpenses.splice(i,1); saveData(); renderAll(); }
       window.addExpense = function() {
         const desc = document.getElementById("desc").value;
         const amt = +document.getElementById("amount").value;
         const cat = document.getElementById("category").value;
-        if(desc && amt) { variableExpenses.push({date: new Date().toLocaleDateString(), desc, amount: amt, category: cat}); saveData(); renderVariableExpenses(); renderSummary(); }
+        const today = new Date();
+        let weekNumber = getWeekFromSalary(today);
+        if(desc && amt) {
+          variableExpenses.push({ date: today.toLocaleDateString(), desc, amount: amt, category: cat, week: weekNumber });
+          saveData(); renderAll();
+        }
       }
-      window.deleteVariable = function(i) { variableExpenses.splice(i,1); saveData(); renderVariableExpenses(); renderSummary(); }
+      window.deleteVariable = function(i) { variableExpenses.splice(i,1); saveData(); renderAll(); }
       window.setUserWeeklyLimit = function() {
         const val = +document.getElementById("userWeeklyLimit").value;
-        if(val) { userWeeklyLimit = val; saveData(); renderSummary(); }
+        if(val) { userWeeklyLimit = val; saveData(); renderAll(); }
       }
-      window.resetWeeklyLimit = function() { userWeeklyLimit = 0; saveData(); renderSummary(); }
+      window.resetWeeklyLimit = function() { userWeeklyLimit = 0; saveData(); renderAll(); }
 
-      // أول تشغيل
-      renderFixedExpenses();
-      renderVariableExpenses();
-      renderSummary();
+      function renderAll() {
+        renderFixedExpenses();
+        renderVariableExpenses();
+        renderWeeklyReport();
+        renderSummary();
+      }
+
+      renderAll();
     });
   </script>
 </body>
